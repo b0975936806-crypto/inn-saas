@@ -1,0 +1,67 @@
+name: Check Static Data
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  check-static-data:
+    runs-on: ubuntu-latest
+    name: Check for Mock/Hardcoded Data
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Check for mock/fallback data keywords
+        run: |
+          echo "🔍 檢查靜態資料關鍵字..."
+          if grep -rn "mockData\|fakeData\|fallbackData\|假資料\|静态资料" \
+            apps/admin/src/ apps/web/src/ 2>/dev/null; then
+            echo "❌ 發現靜態資料關鍵字！請移除所有 mock/fallback/假資料"
+            exit 1
+          fi
+          echo "✅ 無靜態資料關鍵字"
+
+      - name: Check for hardcoded dashboard values
+        run: |
+          echo "🔍 檢查硬編碼儀表板數值..."
+          if grep -rn "totalBookings:\|totalRevenue:\|occupancyRate:\|totalGuests:" \
+            apps/admin/src/ apps/web/src/ 2>/dev/null; then
+            echo "❌ 發現硬編碼數值！這些資料必須來自 API"
+            exit 1
+          fi
+          echo "✅ 無硬編碼儀表板數值"
+
+      - name: Check for generate mock functions
+        run: |
+          echo "🔍 檢查假資料生成函數..."
+          if grep -rn "generateMock\|generateData\|generateRevenue\|createFake" \
+            apps/admin/src/ apps/web/src/ 2>/dev/null; then
+            echo "❌ 發現假資料生成函數！請移除"
+            exit 1
+          fi
+          echo "✅ 無假資料生成函數"
+
+      - name: Check for try-catch with fallback
+        run: |
+          echo "🔍 檢查 try-catch fallback 模式..."
+          if grep -rn "try.*{" apps/admin/src/ apps/web/src/ -A 5 2>/dev/null | \
+             grep -B 5 -A 5 "catch.*{" | grep -E "(setData|setOrders|setBookings|setRooms)" 2>/dev/null; then
+            echo "❌ 發現 try-catch 中設置資料的模式！API 失敗時不應設置任何資料"
+            exit 1
+          fi
+          echo "✅ 無 try-catch fallback 模式"
+
+      - name: Summary
+        run: |
+          echo ""
+          echo "========================================"
+          echo "✅ 所有靜態資料檢查通過！"
+          echo "========================================"
+          echo ""
+          echo "📋 測試員驗收清單："
+          echo "1. 斷網測試：關閉網路後刷新頁面，不應顯示任何資料"
+          echo "2. API 失敗測試：修改 API URL 為錯誤地址，應顯示錯誤訊息而非資料"
+          echo "3. Console 檢查：不應出現 'mock'、'fake'、'fallback' 等字樣"
+          echo ""
