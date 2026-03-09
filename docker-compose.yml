@@ -1,0 +1,171 @@
+# ⚠️ 注意：PostgreSQL 已遷移到系統安裝（port 5433）
+# 本檔案中的 PostgreSQL 服務僅供參考/開發環境使用
+# 生產環境請使用系統 PostgreSQL，詳見 ARCHITECTURE-CHANGE.md
+
+version: '3.8'
+
+services:
+  # Nginx 反向代理
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8089:80"
+      - "8449:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - tenant_data:/data/tenants:ro
+    depends_on:
+      - api
+      - web
+      - admin
+      - line-bot
+    networks:
+      - inn-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 應用 API
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MASTER_DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-innsaas123}@postgres:5432/inn_master
+      - REDIS_URL=redis://redis:6379
+      - TENANT_DATA_ROOT=/data/tenants
+      - JWT_SECRET=${JWT_SECRET:-inn-saas-secret-key-2026}
+    volumes:
+      - tenant_data:/data/tenants
+      - ./logs/api:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - inn-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 前台網站
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=https://api.inn.yu.dopay.biz
+    networks:
+      - inn-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 後台管理
+  admin:
+    build:
+      context: ./apps/admin
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=https://api.inn.yu.dopay.biz
+    networks:
+      - inn-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-innsaas123}
+      - POSTGRES_DB=inn_master
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - inn-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    networks:
+      - inn-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # LINE Bot
+  line-bot:
+    build:
+      context: ./apps/line-bot
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - LINE_CHANNEL_ACCESS_TOKEN=${LINE_CHANNEL_ACCESS_TOKEN}
+      - LINE_CHANNEL_SECRET=${LINE_CHANNEL_SECRET}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - API_BASE_URL=http://api:3000
+    networks:
+      - inn-network
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  inn-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  tenant_data:

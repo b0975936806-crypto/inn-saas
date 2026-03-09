@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 租戶基本設定
+model Tenant {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique
+  name        String
+  description String?
+  phone       String?
+  email       String?
+  address     String?
+  
+  // 金流設定
+  ecpayEnabled     Boolean @default(false)
+  ecpayMerchantId  String?
+  ecpayHashKey     String?
+  ecpayHashIv      String?
+  ecpayTestMode    Boolean @default(true)
+  
+  linepayEnabled        Boolean @default(false)
+  linepayChannelId      String?
+  linepayChannelSecret  String?
+  linepayChannelAccessToken String?
+  
+  // 前台設定
+  theme         String   @default("minimal")
+  primaryColor  String   @default("#4A90D9")
+  logoUrl       String?
+  faviconUrl    String?
+  
+  // LINE Bot
+  lineBotSettings LineBotSettings?
+  
+  // 關聯
+  roomTypes RoomType[]
+  rooms     Room[]
+  users     User[]
+  bookings  Booking[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LineBotSettings {
+  id              Int     @id @default(autoincrement())
+  tenantId        Int     @unique
+  tenant          Tenant  @relation(fields: [tenantId], references: [id])
+  
+  channelId       String?
+  channelSecret   String
+  channelAccessToken String
+  
+  welcomeMessage  String  @default("歡迎光臨！請輸入「查空房」查詢可訂房間。")
+  autoReplyEnabled Boolean @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RoomType {
+  id          Int     @id @default(autoincrement())
+  tenantId    Int
+  tenant      Tenant  @relation(fields: [tenantId], references: [id])
+  
+  name        String
+  description String?
+  basePrice   Int
+  maxGuests   Int     @default(2)
+  bedType     String?
+  amenities   Json    @default("[]")
+  images      Json    @default("[]")
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+  
+  rooms Room[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Room {
+  id           Int      @id @default(autoincrement())
+  tenantId     Int
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  roomTypeId   Int
+  roomType     RoomType @relation(fields: [roomTypeId], references: [id])
+  
+  roomNumber   String
+  floor        Int?
+  status       String   @default("available") // available, occupied, maintenance
+  notes        String?
+  
+  bookings Booking[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([tenantId, roomNumber])
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  tenantId      Int
+  tenant        Tenant    @relation(fields: [tenantId], references: [id])
+  
+  email         String?
+  phone         String?
+  name          String
+  passwordHash  String?   @map("password_hash")
+  role          String    @default("customer") // owner, manager, staff, customer
+  isActive      Boolean   @default(true) @map("is_active")
+  lineUserId    String?   @map("line_user_id")
+  
+  bookings Booking[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("users")
+}
+
+model Booking {
+  id              Int      @id @default(autoincrement())
+  tenantId        Int
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  bookingNumber   String   @unique
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id])
+  roomId          Int
+  room            Room     @relation(fields: [roomId], references: [id])
+  
+  checkInDate     DateTime
+  checkOutDate    DateTime
+  nights          Int
+  
+  guestCount      Int      @default(1)
+  guestName       String?
+  guestPhone      String?
+  guestEmail      String?
+  specialRequests String?
+  
+  totalAmount     Int
+  
+  status          String   @default("pending") // pending, confirmed, checked_in, checked_out, cancelled
+  paymentStatus   String   @default("pending") // pending, paid, refunded
+  paymentMethod   String?  // ecpay, linepay, cash, transfer
+  
+  source          String   @default("manual") // web, line, manual, ota
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

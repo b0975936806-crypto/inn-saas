@@ -1,0 +1,24 @@
+{
+  "name": "inn-saas",
+  "version": "1.0.0",
+  "description": "SaaS 民宿管理系統",
+  "private": true,
+  "scripts": {
+    "dev:api": "cd apps/api && npm run dev",
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:admin": "cd apps/admin && npm run dev",
+    "dev:bot": "cd apps/line-bot && npm run dev",
+    "build": "pnpm -r build",
+    "build:bot": "cd apps/line-bot && npm run build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:bot": "docker-compose up -d line-bot"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@inn-saas/ui",
+  "version": "1.0.0",
+  "description": "Shared UI components",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "private": true
+}
